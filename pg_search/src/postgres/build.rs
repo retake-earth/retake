@@ -23,8 +23,8 @@ use crate::postgres::storage::block::{
 };
 use crate::postgres::storage::buffer::BufferManager;
 use crate::postgres::storage::{LinkedBytesList, LinkedItemList};
-use crate::postgres::utils::row_to_search_document;
-use crate::schema::SearchIndexSchema;
+use crate::postgres::utils::{categorize_fields, row_to_search_document, CategorizedFieldData};
+use crate::schema::SearchField;
 use pgrx::itemptr::item_pointer_get_both;
 use pgrx::pg_sys::WalLevel::WAL_LEVEL_REPLICA;
 use pgrx::*;
@@ -35,22 +35,25 @@ use std::time::Instant;
 struct BuildState {
     count: usize,
     memctx: PgMemoryContexts,
-    tupdesc: PgTupleDesc<'static>,
     start: Instant,
     writer: SearchIndexWriter,
-    schema: SearchIndexSchema,
+    categorized_fields: Vec<(SearchField, CategorizedFieldData)>,
+    key_field_name: String,
 }
 
 impl BuildState {
     fn new(indexrel: &PgRelation, writer: SearchIndexWriter) -> Self {
-        let schema = writer.schema.clone();
+        let tupdesc = unsafe { PgTupleDesc::from_pg_unchecked(indexrel.rd_att) };
+        let categorized_fields = categorize_fields(&tupdesc, &writer.schema);
+        let key_field_name = writer.schema.key_field().name.0;
+
         BuildState {
             count: 0,
             memctx: PgMemoryContexts::new("pg_search_index_build"),
-            tupdesc: unsafe { PgTupleDesc::from_pg_copy(indexrel.rd_att) },
             start: Instant::now(),
             writer,
-            schema,
+            categorized_fields,
+            key_field_name,
         }
     }
 }
@@ -157,8 +160,8 @@ unsafe extern "C" fn build_callback(
         .as_mut()
         .expect("BuildState pointer should not be null");
 
-    let tupdesc = &build_state.tupdesc;
-    let schema = &build_state.schema;
+    let categorized_fields = &build_state.categorized_fields;
+    let key_field_name = &build_state.key_field_name;
     let writer = &mut build_state.writer;
     // In the block below, we switch to the memory context we've defined on our build
     // state, resetting it before and after. We do this because we're looking up a
@@ -171,14 +174,15 @@ unsafe extern "C" fn build_callback(
     unsafe {
         build_state.memctx.reset();
         build_state.memctx.switch_to(|_| {
-            let search_document =
-                row_to_search_document(tupdesc, values, isnull, schema).unwrap_or_else(|err| {
-                    panic!(
-                        "error creating index entries for index '{}': {err}",
-                        CStr::from_ptr((*(*indexrel).rd_rel).relname.data.as_ptr())
-                            .to_string_lossy()
-                    );
-                });
+            let mut search_document = writer.schema.new_document();
+
+            row_to_search_document(values, isnull, key_field_name, categorized_fields, &mut search_document).unwrap_or_else(|err| {
+                panic!(
+                    "error creating index entries for index '{}': {err}",
+                    CStr::from_ptr((*(*indexrel).rd_rel).relname.data.as_ptr())
+                        .to_string_lossy()
+                );
+            });
             writer
                 .insert(search_document, item_pointer_get_both(*ctid))
                 .unwrap_or_else(|err| {

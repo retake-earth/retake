@@ -53,7 +53,9 @@ pub fn save_schema(
     let mut schema = LinkedBytesList::open(relation_oid, SCHEMA_START, need_wal);
     if schema.is_empty() {
         let bytes = serde_json::to_vec(tantivy_schema)?;
-        unsafe { schema.write(&bytes)? };
+        unsafe {
+            let _ = schema.write(&bytes)?;
+        }
     }
     Ok(())
 }
@@ -66,7 +68,9 @@ pub fn save_settings(
     let mut settings = LinkedBytesList::open(relation_oid, SETTINGS_START, need_wal);
     if settings.is_empty() {
         let bytes = serde_json::to_vec(tantivy_settings)?;
-        unsafe { settings.write(&bytes)? };
+        unsafe {
+            let _ = settings.write(&bytes)?;
+        }
     }
     Ok(())
 }

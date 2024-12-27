@@ -17,7 +17,8 @@
 
 use crate::index::writer::index::SearchIndexWriter;
 use crate::index::{BlockDirectoryType, WriterResources};
-use crate::postgres::utils::row_to_search_document;
+use crate::postgres::utils::{categorize_fields, row_to_search_document, CategorizedFieldData};
+use crate::schema::SearchField;
 use pgrx::itemptr::item_pointer_get_both;
 use pgrx::{pg_guard, pg_sys, PgMemoryContexts, PgRelation, PgTupleDesc};
 use std::ffi::CStr;
@@ -29,6 +30,8 @@ extern "C" {
 
 pub struct InsertState {
     pub writer: Option<SearchIndexWriter>,
+    categorized_fields: Vec<(SearchField, CategorizedFieldData)>,
+    key_field_name: String,
     abort_on_drop: bool,
     #[cfg(not(feature = "pg17"))]
     committed: bool,
@@ -62,8 +65,13 @@ impl InsertState {
         writer_resources: WriterResources,
     ) -> anyhow::Result<Self> {
         let writer = SearchIndexWriter::open(indexrel, BlockDirectoryType::Mvcc, writer_resources)?;
+        let tupdesc = unsafe { PgTupleDesc::from_pg_unchecked(indexrel.rd_att) };
+        let categorized_fields = categorize_fields(&tupdesc, &writer.schema);
+        let key_field_name = writer.schema.key_field().name.0;
         Ok(Self {
             writer: Some(writer),
+            categorized_fields,
+            key_field_name,
             abort_on_drop: false,
             #[cfg(not(feature = "pg17"))]
             committed: false,
@@ -141,16 +149,25 @@ unsafe fn aminsert_internal(
 ) -> bool {
     let result = catch_unwind(|| {
         let state = &mut *init_insert_state(index_relation, index_info, WriterResources::Statement);
-        let tupdesc = PgTupleDesc::from_pg_unchecked((*index_relation).rd_att);
+        let categorized_fields = &state.categorized_fields;
+        let key_field_name = &state.key_field_name;
         let writer = state.writer.as_mut().expect("writer should not be null");
-        let search_document = row_to_search_document(&tupdesc, values, isnull, &writer.schema)
-            .unwrap_or_else(|err| {
-                panic!(
-                    "error creating index entries for index '{}': {err}",
-                    CStr::from_ptr((*(*index_relation).rd_rel).relname.data.as_ptr())
-                        .to_string_lossy()
-                );
-            });
+
+        let mut search_document = writer.schema.new_document();
+
+        row_to_search_document(
+            values,
+            isnull,
+            key_field_name,
+            categorized_fields,
+            &mut search_document,
+        )
+        .unwrap_or_else(|err| {
+            panic!(
+                "error creating index entries for index '{}': {err}",
+                CStr::from_ptr((*(*index_relation).rd_rel).relname.data.as_ptr()).to_string_lossy()
+            );
+        });
         writer
             .insert(search_document, item_pointer_get_both(*ctid))
             .expect("insertion into index should succeed");

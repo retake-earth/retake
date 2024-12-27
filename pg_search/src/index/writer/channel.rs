@@ -4,7 +4,6 @@ use std::io::{Result, Write};
 use std::path::{Path, PathBuf};
 use tantivy::directory::{AntiCallToken, TerminatingWrite};
 
-#[derive(Clone, Debug)]
 pub struct ChannelWriter {
     path: PathBuf,
     sender: Sender<ChannelRequest>,

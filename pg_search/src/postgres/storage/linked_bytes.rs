@@ -25,7 +25,7 @@ use pgrx::pg_sys;
 use rustc_hash::FxHashMap;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 use std::ops::{Deref, Range};
 use std::sync::Arc;
 // ---------------------------------------------------------------
@@ -69,6 +69,19 @@ pub struct LinkedBytesList {
     pub header_blockno: pg_sys::BlockNumber,
     metadata: LinkedListData,
     skipcache: Arc<Mutex<FxHashMap<usize, pg_sys::BlockNumber>>>,
+}
+
+impl Write for LinkedBytesList {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        unsafe {
+            self.write(buf)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
 }
 
 impl LinkedList for LinkedBytesList {
@@ -168,12 +181,12 @@ impl LinkedBytesList {
         }
     }
 
-    pub unsafe fn write(&mut self, bytes: &[u8]) -> Result<()> {
+    pub unsafe fn write(&mut self, bytes: &[u8]) -> Result<usize> {
         let mut data_cursor = Cursor::new(bytes);
         let mut bytes_written = 0;
 
+        let mut insert_blockno = self.get_last_blockno();
         while bytes_written < bytes.len() {
-            let insert_blockno = self.get_last_blockno();
             let mut buffer = self.bman.get_buffer_mut(insert_blockno);
             let mut page = buffer.page_mut();
             let free_space = page.header().free_space();
@@ -203,6 +216,8 @@ impl LinkedBytesList {
                     metadata.skip_list[idx] = new_blockno;
                 }
                 self.metadata = *metadata;
+
+                insert_blockno = new_blockno;
                 continue;
             }
 
@@ -213,7 +228,7 @@ impl LinkedBytesList {
             page.header_mut().pd_lower += bytes_to_write as u16;
         }
 
-        Ok(())
+        Ok(bytes_written)
     }
 
     pub unsafe fn read_all(&self) -> Vec<u8> {

@@ -17,7 +17,7 @@
 
 use crate::index::writer::index::IndexError;
 use crate::postgres::types::TantivyValue;
-use crate::schema::{SearchDocument, SearchFieldName, SearchIndexSchema};
+use crate::schema::{SearchDocument, SearchField, SearchIndexSchema};
 use anyhow::{anyhow, Result};
 use chrono::{NaiveDate, NaiveTime};
 use pgrx::itemptr::{item_pointer_get_both, item_pointer_set_all};
@@ -72,13 +72,19 @@ pub fn u64_to_item_pointer(value: u64, tid: &mut pg_sys::ItemPointerData) {
     item_pointer_set_all(tid, blockno, offno);
 }
 
-pub unsafe fn row_to_search_document(
+pub struct CategorizedFieldData {
+    pub attno: usize,
+    pub base_oid: PgOid,
+    pub is_array: bool,
+    pub is_json: bool,
+}
+
+pub fn categorize_fields(
     tupdesc: &PgTupleDesc,
-    values: *mut pg_sys::Datum,
-    isnull: *mut bool,
     schema: &SearchIndexSchema,
-) -> Result<SearchDocument, IndexError> {
-    let mut document = schema.new_document();
+) -> Vec<(SearchField, CategorizedFieldData)> {
+    let mut categorized_fields = Vec::new();
+
     let mut alias_lookup = schema.alias_lookup();
 
     // Create a vector of index entries from the postgres row.
@@ -107,36 +113,65 @@ pub unsafe fn row_to_search_document(
                 PgOid::BuiltIn(pg_sys::BuiltinOid::JSONBOID | pg_sys::BuiltinOid::JSONOID)
             );
 
-            let datum = *values.add(attno);
-            let isnull = *isnull.add(attno);
-
-            let SearchFieldName(key_field_name) = schema.key_field().name;
-            if key_field_name == attname && isnull {
-                return Err(IndexError::KeyIdNull(key_field_name));
-            }
-
-            if isnull {
-                continue;
-            }
-
-            if is_array {
-                for value in TantivyValue::try_from_datum_array(datum, base_oid)? {
-                    document.insert(search_field.id, value.tantivy_schema_value());
-                }
-            } else if is_json {
-                for value in TantivyValue::try_from_datum_json(datum, base_oid)? {
-                    document.insert(search_field.id, value.tantivy_schema_value());
-                }
-            } else {
-                document.insert(
-                    search_field.id,
-                    TantivyValue::try_from_datum(datum, base_oid)?.tantivy_schema_value(),
-                );
-            }
+            categorized_fields.push((
+                search_field.clone(),
+                CategorizedFieldData {
+                    attno,
+                    base_oid,
+                    is_array,
+                    is_json,
+                },
+            ));
         }
     }
 
-    Ok(document)
+    categorized_fields
+}
+
+pub unsafe fn row_to_search_document(
+    values: *mut pg_sys::Datum,
+    isnull: *mut bool,
+    key_field_name: &str,
+    categorized_fields: &Vec<(SearchField, CategorizedFieldData)>,
+    document: &mut SearchDocument,
+) -> Result<(), IndexError> {
+    for (
+        search_field,
+        CategorizedFieldData {
+            attno,
+            base_oid,
+            is_array,
+            is_json,
+        },
+    ) in categorized_fields
+    {
+        let datum = *values.add(*attno);
+        let isnull = *isnull.add(*attno);
+
+        if key_field_name == search_field.name.as_ref() && isnull {
+            return Err(IndexError::KeyIdNull(key_field_name.to_string()));
+        }
+
+        if isnull {
+            continue;
+        }
+
+        if *is_array {
+            for value in TantivyValue::try_from_datum_array(datum, *base_oid)? {
+                document.insert(search_field.id, value.tantivy_schema_value());
+            }
+        } else if *is_json {
+            for value in TantivyValue::try_from_datum_json(datum, *base_oid)? {
+                document.insert(search_field.id, value.tantivy_schema_value());
+            }
+        } else {
+            document.insert(
+                search_field.id,
+                TantivyValue::try_from_datum(datum, *base_oid)?.tantivy_schema_value(),
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Utility function for easy `f64` to `u32` conversion
