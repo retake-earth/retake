@@ -91,7 +91,16 @@ pub extern "C" fn ambuild(
     }
 
     let tuple_count = do_heap_scan(index_info, &heap_relation, &index_relation);
+
+    if crate::gucs::log_create_index_progress() {
+        pgrx::log!("flushing remaining buffers");
+    }
+
     unsafe { pg_sys::FlushRelationBuffers(indexrel) };
+
+    if crate::gucs::log_create_index_progress() {
+        pgrx::log!("remaining buffers flushed");
+    }
 
     let mut result = unsafe { PgBox::<pg_sys::IndexBuildResult>::alloc0() };
     result.heap_tuples = tuple_count as f64;
