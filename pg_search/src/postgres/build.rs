@@ -178,6 +178,13 @@ unsafe extern "C" fn build_callback(
         // especially after CREATE INDEX has finished
         build_state.count += 1;
 
+        if build_state.count > 0 && (build_state.count % 100_000_000 == 0) {
+            if crate::gucs::log_create_index_progress() {
+                pgrx::log!("flushing buffers after {} rows", build_state.count);
+            }
+            pg_sys::FlushRelationBuffers(indexrel);
+        }
+
         if crate::gucs::log_create_index_progress() && build_state.count % 100_000 == 0 {
             let secs = build_state.start.elapsed().as_secs_f64();
             let rate = build_state.count as f64 / secs;
