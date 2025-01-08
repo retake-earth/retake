@@ -204,6 +204,18 @@ impl SearchIndexWriter {
         Ok(())
     }
 
+    pub fn commit_build(self) -> Result<()> {
+        let index_oid = self.relation_oid;
+        pgrx::log!("commit_build");
+        self.commit(true)?;
+        pgrx::log!("commit_build done");
+        unsafe {
+            garbage_collect_metas(index_oid)?;
+        }
+        pgrx::log!("garbage_collect_metas done");
+        Ok(())
+    }
+
     pub fn commit_inserts(self) -> Result<()> {
         let index_oid = self.relation_oid;
         let merge_lock = if self.wants_merge {

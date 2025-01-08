@@ -131,7 +131,7 @@ fn do_heap_scan<'a>(
 
         state
             .writer
-            .commit_inserts()
+            .commit_build()
             .unwrap_or_else(|e| panic!("failed to commit new tantivy index: {e}"));
 
         state.count
