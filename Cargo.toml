@@ -3,7 +3,7 @@ resolver = "2"
 members = ["cargo-paradedb", "pg_search", "tests", "tokenizers"]
 
 [workspace.package]
-version = "0.13.2"
+version = "0.14.0"
 edition = "2021"
 license = "AGPL-3.0"
 

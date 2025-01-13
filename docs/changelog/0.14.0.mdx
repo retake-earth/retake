@@ -1,0 +1,30 @@
+---
+title: 0.14.0
+---
+
+## Introducing Block Storage
+
+`pg_search` is now on Postgres block storage 🎉
+
+To ParadeDB Community, this brings:
+
+- ~5X improvement to indexing times
+- ~20X improvement to write throughput
+- Integration with Postgres' buffer cache
+
+To ParadeDB Enterprise it brings:
+
+- Postgres write-ahead log (WAL) integration
+- Physical replication support
+- Crash and point-in-time recovery
+- CloudNativePG compatibility for high availability
+
+Because this is a breaking change, upgrade scripts to `0.14.0` are not provided. To upgrade:
+
+1. Drop all existing `pg_search` indexes
+2. Drop and recreate the `pg_search` extension
+3. Rebuild all indexes
+
+## Full Changelog
+
+The full changelog is available [here](https://github.com/paradedb/paradedb/releases/tag/v0.14.0).

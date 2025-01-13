@@ -48,15 +48,18 @@ jobs:
           if [ -z "${{ github.event.inputs.version }}" ]; then
             if [[ $GITHUB_REF == refs/tags/v* ]]; then
               VERSION=${GITHUB_REF#refs/tags/v}
+              TAG=${GITHUB_REF#refs/tags/}
             else
               # If there is no tag and no provided version, it's a test run and we set a default version
               VERSION="0.0.0"
+              TAG="v0.0.0"
             fi
           else
             VERSION=${{ github.event.inputs.version }}
           fi
           echo "GitHub Tag Version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
 
       # Cross-compilation is incredibly slow, so we use an external service called Depot to

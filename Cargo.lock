@@ -566,7 +566,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustversion",
- "syn 2.0.90",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-paradedb"
-version = "0.13.2"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "async-std",
@@ -1121,7 +1121,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim 0.11.1",
- "syn 2.0.90",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -1132,7 +1132,7 @@ checksum = "d336a2a514f6ccccaa3e09b02d41d35330c07ddf03a62165fcec10bb561c7806"
 dependencies = [
  "darling_core",
  "quote",
- "syn 2.0.90",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -3237,7 +3237,7 @@ dependencies = [
 
 [[package]]
 name = "pg_search"
-version = "0.13.2"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3618,7 +3618,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64d1ec885c64d0457d564db4ec299b2dae3f9c02808b8ad9c3a089c591b18033"
 dependencies = [
  "proc-macro2",
- "syn 2.0.90",
+ "syn 2.0.96",
 ]
 
 [[package]]
@@ -5061,7 +5061,7 @@ dependencies = [
  "tantivy-sstable",
  "tantivy-stacker",
  "tantivy-tokenizer-api",
- "thiserror 2.0.8",
+ "thiserror 2.0.11",
  "time",
  "uuid",
  "winapi",
@@ -5193,7 +5193,7 @@ dependencies = [
 
 [[package]]
 name = "tests"
-version = "0.13.2"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "approx",
@@ -5351,7 +5351,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokenizers"
-version = "0.13.2"
+version = "0.14.0"
 dependencies = [
  "anyhow",
  "lindera-core",

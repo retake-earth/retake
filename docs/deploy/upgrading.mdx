@@ -26,7 +26,7 @@ SELECT extversion FROM pg_extension WHERE extname = 'pg_analytics';
 Because `pg_search`, `pg_analytics`, and `pgvector` are independent extensions, they each have their own versions.
 For the latest available version, please refer to the respective Github repos:
 
-1. [`pg_search`](https://github.com/paradedb/paradedb/releases) is on version `0.13.2`
+1. [`pg_search`](https://github.com/paradedb/paradedb/releases) is on version `0.14.0`
 2. [`pg_analytics`](https://github.com/paradedb/pg_analytics/blob/main/pg_analytics.control) is on version `0.3.0`
 3. [`pgvector`](https://github.com/pgvector/pgvector/tags) is on version `0.8.0`
 
@@ -43,14 +43,14 @@ To upgrade the ParadeDB Docker image while preserving your data volume:
 docker pull paradedb/paradedb:<version_number>
 ```
 
-The latest version of the Docker image should be `0.13.2`.
+The latest version of the Docker image should be `0.14.0`.
 
 3. Start the new ParadeDB Docker image via `docker run paradedb`.
 
 4. Run the following commands to upgrade all extensions to their latest version.
 
 ```sql
-ALTER EXTENSION pg_search UPDATE TO '0.13.2';
+ALTER EXTENSION pg_search UPDATE TO '0.14.0';
 ALTER EXTENSION pg_analytics UPDATE TO '0.3.0';
 ALTER EXTENSION vector UPDATE TO '0.8.0';
 ```
