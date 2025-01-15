@@ -7,19 +7,10 @@
 name: Benchmark pg_search
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - dev
-      - main
-    paths:
-      - ".github/workflows/benchmark-pg_search.yml"
-      - "cargo-paradedb/**"
-      - "docker/Dockerfile"
-      - "pg_search/**"
-      - "tokenizers/Cargo.toml"
+  schedule:
+    - cron: "1 0 * * 1,2,3,4,5" # Run once per day on weekdays (days of the week 1-5) at 00:01 UTC
   push:
-    branches: # Also run on `dev` and `main` to store benchmark baselines in GitHub Artifacts for PRs to compare against
+    branches: # Also run on `dev` and `main` to fill the GitHub Actions Rust cache in a way that PRs can see it
       - dev
       - main
     paths:

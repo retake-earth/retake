@@ -233,6 +233,12 @@ impl CustomScan for PdbScan {
                 let total_cost = startup_cost + (rows * per_tuple_cost);
                 let segment_count = index.searchable_segments().unwrap_or_default().len();
 
+                builder.custom_private().set_segment_count(
+                    index
+                        .searchable_segments()
+                        .map(|segments| segments.len())
+                        .unwrap_or(0),
+                );
                 builder = builder.set_rows(rows);
                 builder = builder.set_startup_cost(startup_cost);
                 builder = builder.set_total_cost(total_cost);
@@ -395,6 +401,8 @@ impl CustomScan for PdbScan {
                 .expect("should have a Qual structure");
             builder.custom_state().search_query_input = SearchQueryInput::from(&quals);
 
+            builder.custom_state().segment_count = builder.custom_private().segment_count();
+
             // now build up the var attribute name lookup map
             unsafe fn populate_var_attname_lookup(
                 lookup: &mut HashMap<(i32, pg_sys::AttrNumber), String>,
@@ -498,6 +506,11 @@ impl CustomScan for PdbScan {
     ) {
         explainer.add_text("Table", state.custom_state().heaprelname());
         explainer.add_text("Index", state.custom_state().indexrelname());
+        explainer.add_unsigned_integer(
+            "Segment Count",
+            state.custom_state().segment_count as u64,
+            None,
+        );
 
         if explainer.is_analyze() {
             explainer.add_unsigned_integer(

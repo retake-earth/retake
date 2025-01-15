@@ -37,7 +37,6 @@ pub struct TopNScanExecState {
     need_scores: bool,
 
     // set during init
-    have_less: bool,
     search_query_input: Option<SearchQueryInput>,
     search_reader: Option<SearchIndexReader>,
     sort_field: Option<String>,
@@ -116,7 +115,6 @@ impl TopNScanExecState {
         self.last_ctid = 0;
         self.chunk_size = 0;
         self.retry_count = 0;
-        self.have_less = false;
     }
 }
 
@@ -137,10 +135,6 @@ impl ExecMethod for TopNScanExecState {
         if matches!(search_results, SearchResults::None) {
             false
         } else {
-            let len = search_results
-                .len()
-                .expect("search_results should not be empty");
-            self.have_less = len < self.limit;
             self.search_results = search_results;
             self.reset();
             true
@@ -157,7 +151,7 @@ impl ExecMethod for TopNScanExecState {
                         return ExecState::Eof;
                     }
                     None => {
-                        if self.found == self.limit || self.have_less {
+                        if self.found <= self.limit {
                             // we found all the matching rows
                             return ExecState::Eof;
                         }

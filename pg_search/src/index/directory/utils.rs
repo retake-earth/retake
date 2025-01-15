@@ -72,7 +72,6 @@ pub unsafe fn save_new_metas(
     prev_meta: &IndexMeta,
     directory_entries: &mut FxHashMap<PathBuf, FileEntry>,
 ) -> Result<()> {
-    let current_xid = pg_sys::GetCurrentTransactionId();
     let mut linked_list =
         LinkedItemList::<SegmentMetaEntry>::open(relation_oid, SEGMENT_METAS_START);
 
@@ -132,7 +131,7 @@ pub unsafe fn save_new_metas(
             let meta_entry = SegmentMetaEntry {
                 segment_id: *id,
                 max_doc: created_segment.max_doc(),
-                xmin: current_xid,
+                xmin: pg_sys::GetCurrentTransactionId(),
                 xmax: pg_sys::InvalidTransactionId,
                 postings: files.remove(&SegmentComponent::Postings).map(|e| e.0),
                 positions: files.remove(&SegmentComponent::Positions).map(|e| e.0),
@@ -210,7 +209,7 @@ pub unsafe fn save_new_metas(
                     panic!("segment id `{id}` should be in the segment meta linked list: {e}")
                 });
 
-            meta_entry.xmax = current_xid;
+            meta_entry.xmax = pg_sys::GetCurrentTransactionId();
             (meta_entry, blockno)
         })
         .collect::<Vec<_>>();
@@ -235,7 +234,7 @@ pub unsafe fn save_new_metas(
 
     // delete old entries and their corresponding files
     for (entry, blockno) in &deleted_entries {
-        assert!(entry.xmax == current_xid);
+        assert!(entry.xmax == pg_sys::GetCurrentTransactionId());
 
         let mut buffer = linked_list.bman_mut().get_buffer_mut(*blockno);
         let mut page = buffer.page_mut();
@@ -338,7 +337,7 @@ pub unsafe fn load_metas(
         while offsetno <= max_offset {
             if let Some((entry, _)) = page.read_item::<SegmentMetaEntry>(offsetno) {
                 if (solve_mvcc == MvccSatisfies::Any && !entry.recyclable(snapshot, heap_relation))
-                    || entry.visible(snapshot)
+                    || (solve_mvcc == MvccSatisfies::Snapshot && entry.visible(snapshot))
                 {
                     let inner_segment_meta = InnerSegmentMeta {
                         max_doc: entry.max_doc,

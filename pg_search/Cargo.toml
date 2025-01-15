@@ -17,6 +17,7 @@ pg16 = ["pgrx/pg16", "pgrx-tests/pg16"]
 pg17 = ["pgrx/pg17", "pgrx-tests/pg17"]
 pg_test = []
 icu = ["tokenizers/icu"]
+unsafe-postgres = ["pgrx/unsafe-postgres"]
 
 [dependencies]
 anyhow = { version = "1.0.87", features = ["backtrace"] }

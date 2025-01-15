@@ -7,7 +7,7 @@ use tantivy::SegmentMeta;
 #[derive(Debug, Clone)]
 pub enum AllowedMergePolicy {
     None,
-    NPlusOne(usize),
+    NPlusOne,
 }
 
 /// A tantivy [`MergePolicy`] that endeavours to keep a maximum number of segments "N", plus
@@ -57,7 +57,7 @@ impl MergePolicy for NPlusOneMergePolicy {
 pub struct MergeLock(BufferMut);
 
 impl MergeLock {
-    // This lock is acquired by inserts if merge_on_insert is true
+    // This lock is acquired by inserts that attempt to merge segments
     // Merges should only happen if there is no other merge in progress
     // AND the effects of the previous merge are visible
     pub unsafe fn acquire_for_merge(relation_oid: pg_sys::Oid) -> Option<Self> {

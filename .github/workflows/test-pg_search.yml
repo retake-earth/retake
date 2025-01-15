@@ -24,11 +24,6 @@ on:
       - "**/*.rs"
       - "**/*.toml"
   workflow_dispatch:
-    inputs:
-      test_upgrade_version:
-        description: "Upcoming pg_search version to test upgrading against"
-        required: false
-        default: ""
 
 concurrency:
   group: test-pg_search-${{ github.head_ref || github.ref }}

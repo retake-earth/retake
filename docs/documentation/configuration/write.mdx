@@ -15,29 +15,6 @@ maintenance_work_mem = 16GB
 
 Generally speaking, this is the only setting that must be tuned for optimizing these statements.
 
-## Merge on Insert
-
-The BM25 index is made up of a number of individual [segments](/documentation/concepts/index#segment). Every atomic `INSERT`/`UPDATE`/`COPY`
-creates at least one new segment.
-
-Because having significantly more segments than available CPU cores negatively impacts search performance, ParadeDB tries
-to merge smaller indexes into larger ones during an `INSERT`/`UPDATE`/`COPY`. This behavior can be disabled by explicitly setting `merge_on_insert` to `false`.
-Doing so can increase `INSERT`/`UPDATE`/`COPY` throughput at the expense of creating many more segments and slowing down subsequent search queries.
-
-This option can be specified at index creation time or changed afterward:
-
-```sql
--- At index creation
-CREATE INDEX search_idx ON mock_items
-USING bm25 (id, description)
-WITH (key_field='id', merge_on_insert = false);
-
--- Changed afterward
-ALTER INDEX search_idx SET (merge_on_insert = false);
-```
-
-In general, we do not recommend disabling `merge_on_insert`. If disabled, we recommend carefully configuring autovacuum to ensure that the index is merged at regular intervals.
-
 ## Statement Parallelism
 
 <Note>This setting requires superuser privileges.</Note>

@@ -32,6 +32,7 @@ pub struct PrivateData {
     sort_direction: Option<SortDirection>,
     var_attname_lookup: Option<*mut pg_sys::List>,
     maybe_ff: bool,
+    segment_count: usize,
 }
 
 impl From<*mut pg_sys::List> for PrivateData {
@@ -93,6 +94,10 @@ impl PrivateData {
     pub fn set_maybe_ff(&mut self, maybe: bool) {
         self.maybe_ff = maybe;
     }
+
+    pub fn set_segment_count(&mut self, segment_count: usize) {
+        self.segment_count = segment_count;
+    }
 }
 
 //
@@ -136,6 +141,10 @@ impl PrivateData {
 
     pub fn maybe_ff(&self) -> bool {
         self.maybe_ff
+    }
+
+    pub fn segment_count(&self) -> usize {
+        self.segment_count
     }
 }
 
@@ -263,7 +272,7 @@ pub mod serialize {
             privdat.var_attname_lookup.map(|v| v.cast::<pg_sys::Node>()),
         ));
         ser.push(makeBoolean(Some(privdat.maybe_ff)));
-
+        ser.push(makeString(Some(privdat.segment_count)));
         ser
     }
 }
@@ -312,6 +321,7 @@ pub mod deserialize {
                 .get_ptr(8)
                 .and_then(|n| decodeBoolean(n))
                 .unwrap_or_default(),
+            segment_count: input.get_ptr(9).and_then(|n| decodeString(n)).unwrap_or(0),
         }
     }
 }

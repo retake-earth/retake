@@ -95,6 +95,19 @@ fn generates_custom_scan_for_and(mut conn: PgConnection) {
 }
 
 #[rstest]
+fn includes_segment_count(mut conn: PgConnection) {
+    use serde_json::Value;
+
+    SimpleProductsTable::setup().execute(&mut conn);
+
+    "SET enable_indexscan TO off;".execute(&mut conn);
+
+    let (plan, ) = "EXPLAIN (ANALYZE, FORMAT JSON) SELECT * FROM paradedb.bm25_search WHERE bm25_search @@@ 'description:keyboard' AND description @@@ 'shoes'".fetch_one::<(Value,)>(&mut conn);
+    let plan = plan.pointer("/0/Plan/Plans/0").unwrap();
+    assert!(plan.get("Segment Count").is_some());
+}
+
+#[rstest]
 fn field_on_left(mut conn: PgConnection) {
     SimpleProductsTable::setup().execute(&mut conn);
 

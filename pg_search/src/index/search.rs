@@ -20,7 +20,6 @@ use crate::index::channel::{ChannelRequest, ChannelRequestHandler};
 use crate::index::merge_policy::AllowedMergePolicy;
 use crate::index::mvcc::MVCCDirectory;
 use crate::postgres::index::get_fields;
-use crate::postgres::options::SearchIndexCreateOptions;
 use crate::schema::{SearchFieldConfig, SearchIndexSchema};
 use anyhow::Result;
 use crossbeam::channel::Receiver;
@@ -73,37 +72,22 @@ impl BlockDirectoryType {
 }
 
 impl WriterResources {
-    pub fn resources(&self, indexrel: &PgRelation) -> IndexConfig {
-        let options = indexrel.rd_options as *mut SearchIndexCreateOptions;
-        if options.is_null() {
-            panic!("must specify key_field")
-        }
-        let options = unsafe { &*options };
-        let target_segment_count = options.target_segment_count();
-        let merge_on_insert = options.merge_on_insert();
-
+    pub fn resources(&self) -> IndexConfig {
         match self {
             WriterResources::CreateIndex => (
                 gucs::create_index_parallelism(),
                 gucs::create_index_memory_budget(),
                 AllowedMergePolicy::None,
             ),
-            WriterResources::Statement => {
-                let policy = if merge_on_insert {
-                    AllowedMergePolicy::NPlusOne(target_segment_count)
-                } else {
-                    AllowedMergePolicy::None
-                };
-                (
-                    gucs::statement_parallelism(),
-                    gucs::statement_memory_budget(),
-                    policy,
-                )
-            }
+            WriterResources::Statement => (
+                gucs::statement_parallelism(),
+                gucs::statement_memory_budget(),
+                AllowedMergePolicy::NPlusOne,
+            ),
             WriterResources::Vacuum => (
                 gucs::statement_parallelism(),
                 gucs::statement_memory_budget(),
-                AllowedMergePolicy::NPlusOne(target_segment_count),
+                AllowedMergePolicy::None,
             ),
         }
     }

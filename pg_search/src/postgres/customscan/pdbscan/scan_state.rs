@@ -64,6 +64,7 @@ pub struct PdbScanState {
     pub heaprel_relname: String,
 
     pub visibility_checker: Option<VisibilityChecker>,
+    pub segment_count: usize,
 
     pub need_scores: bool,
     pub const_score_node: Option<*mut pg_sys::Const>,

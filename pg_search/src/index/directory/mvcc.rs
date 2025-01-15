@@ -277,9 +277,12 @@ impl Directory for MVCCDirectory {
 
         // try to acquire merge lock and do merge
         if let Some(mut merge_lock) = unsafe { MergeLock::acquire_for_merge(self.relation_oid) } {
-            if let AllowedMergePolicy::NPlusOne(n) = self.merge_policy {
+            if matches!(&self.merge_policy, &AllowedMergePolicy::NPlusOne) {
                 let num_segments = unsafe { merge_lock.num_segments() };
-                let target_segments = std::cmp::max(n, num_segments as usize);
+                let parallelism = std::thread::available_parallelism()
+                    .expect("failed to get available_parallelism")
+                    .get();
+                let target_segments = std::cmp::max(parallelism, num_segments as usize);
                 let merge_policy: Box<dyn MergePolicy> = Box::new(NPlusOneMergePolicy {
                     n: target_segments,
                     min_num_segments: MIN_NUM_SEGMENTS,

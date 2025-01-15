@@ -1,154 +1,152 @@
-# TODO: Reenable this workflow once 0.14.1 is released, since we are now testing
-# upgrading from 0.14.0.
-# # workflows/test-pg_search-upgrade.yml
-# #
-# # Test pg_search Upgrade
-# # Test that the pg_search extension can upgrade via ALTER EXTENSION.
+# workflows/test-pg_search-upgrade.yml
+#
+# Test pg_search Upgrade
+# Test that the pg_search extension can upgrade via ALTER EXTENSION.
 
-# name: Test pg_search Upgrade
+name: Test pg_search Upgrade
 
-# on:
-#   pull_request:
-#     types: [opened, synchronize, reopened, ready_for_review]
-#     branches:
-#       - main # We only run the extension upgrade test on PRs to `main`, since it's when we do the release
-#     paths:
-#       - ".github/workflows/test-pg_search-upgrade.yml"
-#       - "pg_search/**"
-#       - "tests/**"
-#       - "tokenizers/**"
-#   workflow_dispatch:
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main # We only run the extension upgrade test on PRs to `main`, since it's when we do the release
+    paths:
+      - ".github/workflows/test-pg_search-upgrade.yml"
+      - "pg_search/**"
+      - "tests/**"
+      - "tokenizers/**"
+  workflow_dispatch:
 
-# concurrency:
-#   group: test-pg_search-upgrade-${{ github.head_ref || github.ref }}
-#   cancel-in-progress: true
+concurrency:
+  group: test-pg_search-upgrade-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
 
-# jobs:
-#   test-pg_search-upgrade:
-#     name: Test upgrading pg_search via ALTER EXTENSION
-#     runs-on: ubicloud-standard-8
-#     if: github.event.pull_request.draft == false
-#     strategy:
-#       matrix:
-#         pg_version: [17]
+jobs:
+  test-pg_search-upgrade:
+    name: Test upgrading pg_search via ALTER EXTENSION
+    runs-on: ubicloud-standard-8
+    if: github.event.pull_request.draft == false
+    strategy:
+      matrix:
+        pg_version: [17]
 
-#     steps:
-#       - name: Checkout Git Repository
-#         uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0 # Fetch the entire history
+    steps:
+      - name: Checkout Git Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch the entire history
 
-#       - name: Install Rust
-#         uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
-#       - name: Extract pgrx Version
-#         id: pgrx
-#         working-directory: pg_search/
-#         run: |
-#           version=$(cargo tree --depth 1 -i pgrx -p pg_search | head -n 1 | sed -E 's/.*v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
-#           echo "version=$version" >> $GITHUB_OUTPUT
+      - name: Extract pgrx Version
+        id: pgrx
+        working-directory: pg_search/
+        run: |
+          version=$(cargo tree --depth 1 -i pgrx -p pg_search | head -n 1 | sed -E 's/.*v([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          echo "version=$version" >> $GITHUB_OUTPUT
 
-#       # Caches from base branches are available to PRs, but not across unrelated branches, so we only
-#       # save the cache on the 'dev' branch, but load it on all branches.
-#       - name: Install Rust Cache
-#         uses: ubicloud/rust-cache@v2
-#         with:
-#           prefix-key: "v1-rust"
-#           key: ${{ matrix.pg_version }}-${{ steps.pgrx.outputs.version }}
-#           cache-targets: true
-#           cache-all-crates: true
-#           save-if: ${{ github.ref == 'refs/heads/dev' }}
+      # Caches from base branches are available to PRs, but not across unrelated branches, so we only
+      # save the cache on the 'dev' branch, but load it on all branches.
+      - name: Install Rust Cache
+        uses: ubicloud/rust-cache@v2
+        with:
+          prefix-key: "v1-rust"
+          key: ${{ matrix.pg_version }}-${{ steps.pgrx.outputs.version }}
+          cache-targets: true
+          cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
 
-#       - name: Install required system tools
-#         run: sudo apt-get update && sudo apt-get install -y lsof
+      - name: Install required system tools
+        run: sudo apt-get update && sudo apt-get install -y lsof
 
-#       - name: Install & Configure Supported PostgreSQL Version
-#         run: |
-#           wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-#           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-#           sudo apt-get update && sudo apt-get install -y postgresql-${{ matrix.pg_version }} postgresql-server-dev-${{ matrix.pg_version }}
-#           sudo chown -R $(whoami) /usr/share/postgresql/${{ matrix.pg_version }}/ /usr/lib/postgresql/${{ matrix.pg_version }}/ /var/lib/postgresql/${{ matrix.pg_version }}/
-#           echo "/usr/lib/postgresql/${{ matrix.pg_version }}/bin" >> $GITHUB_PATH
+      - name: Install & Configure Supported PostgreSQL Version
+        run: |
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update && sudo apt-get install -y postgresql-${{ matrix.pg_version }} postgresql-server-dev-${{ matrix.pg_version }}
+          sudo chown -R $(whoami) /usr/share/postgresql/${{ matrix.pg_version }}/ /usr/lib/postgresql/${{ matrix.pg_version }}/ /var/lib/postgresql/${{ matrix.pg_version }}/
+          echo "/usr/lib/postgresql/${{ matrix.pg_version }}/bin" >> $GITHUB_PATH
 
-#       # Needed for hybrid search unit tests
-#       - name: Install pgvector
-#         run: |
-#           git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git
-#           cd pgvector/
-#           sudo PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config make -j
-#           sudo PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config make install -j
+      # Needed for hybrid search unit tests
+      - name: Install pgvector
+        run: |
+          git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git
+          cd pgvector/
+          sudo PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config make -j
+          sudo PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config make install -j
 
-#       - name: Install llvm-tools-preview
-#         run: rustup component add llvm-tools-preview
+      - name: Install llvm-tools-preview
+        run: rustup component add llvm-tools-preview
 
-#       # This is the pgrx version compatible with ParadeDB v0.14.0
-#       - name: Install cargo-pgrx for ParadeDB v0.14.0
-#         run: cargo install -j $(nproc) --locked cargo-pgrx --version 0.12.7 --debug
+      # This is the pgrx version compatible with ParadeDB v0.14.0
+      - name: Install cargo-pgrx for ParadeDB v0.14.0
+        run: cargo install -j $(nproc) --locked cargo-pgrx --version 0.12.7 --debug
 
-#       - name: Initialize cargo-pgrx environment for ParadeDB v0.14.0
-#         run: cargo pgrx init "--pg${{ matrix.pg_version }}=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
+      - name: Initialize cargo-pgrx environment for ParadeDB v0.14.0
+        run: cargo pgrx init "--pg${{ matrix.pg_version }}=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
 
-#       - name: Add pg_search to shared_preload_libraries
-#         working-directory: /home/runner/.pgrx/data-${{ matrix.pg_version }}/
-#         run: sed -i "s/^#shared_preload_libraries = .*/shared_preload_libraries = 'pg_search'/" postgresql.conf
+      - name: Add pg_search to shared_preload_libraries
+        working-directory: /home/runner/.pgrx/data-${{ matrix.pg_version }}/
+        run: sed -i "s/^#shared_preload_libraries = .*/shared_preload_libraries = 'pg_search'/" postgresql.conf
 
-#       # This is the first version at which we started supporting upgrading via ALTER EXTENSION
-#       - name: Checkout ParadeDB v0.14.0
-#         run: git checkout v0.14.0
+      # This is the first version at which we started supporting upgrading via ALTER EXTENSION
+      - name: Checkout ParadeDB v0.14.0
+        run: git checkout v0.14.0
 
-#       - name: Compile & install pg_search v0.14.0
-#         working-directory: pg_search/
-#         run: cargo pgrx install --features icu --pg-config="/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
+      - name: Compile & install pg_search v0.14.0
+        working-directory: pg_search/
+        run: cargo pgrx install --features icu --pg-config="/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
 
-#       - name: Start Postgres via cargo-pgrx
-#         working-directory: pg_search/
-#         run: |
-#           RUST_BACKTRACE=1 cargo pgrx start pg${{ matrix.pg_version }}
-#           # Necessary for the ephemeral Postgres test to have proper permissions
-#           sudo chown -R $(whoami) /var/run/postgresql/
+      - name: Start Postgres via cargo-pgrx
+        working-directory: pg_search/
+        run: |
+          RUST_BACKTRACE=1 cargo pgrx start pg${{ matrix.pg_version }}
+          # Necessary for the ephemeral Postgres test to have proper permissions
+          sudo chown -R $(whoami) /var/run/postgresql/
 
-#       - name: Create pg_search extension
-#         working-directory: pg_search/
-#         run: psql -h localhost -p 288${{ matrix.pg_version }} postgres -c 'CREATE EXTENSION pg_search;'
+      - name: Create pg_search extension
+        working-directory: pg_search/
+        run: psql -h localhost -p 288${{ matrix.pg_version }} postgres -c 'CREATE EXTENSION pg_search;'
 
-#       - name: Stop Postgres via cargo-pgrx
-#         working-directory: pg_search/
-#         run: RUST_BACKTRACE=1 cargo pgrx stop pg${{ matrix.pg_version }}
+      - name: Stop Postgres via cargo-pgrx
+        working-directory: pg_search/
+        run: RUST_BACKTRACE=1 cargo pgrx stop pg${{ matrix.pg_version }}
 
-#       - name: Install cargo-pgrx for ParadeDB `dev`
-#         run: cargo install -j $(nproc) --locked cargo-pgrx --version ${{ steps.pgrx.outputs.version }} --debug
+      - name: Install cargo-pgrx for ParadeDB `dev`
+        run: cargo install -j $(nproc) --locked cargo-pgrx --version ${{ steps.pgrx.outputs.version }} --debug
 
-#       - name: Initialize cargo-pgrx environment for ParadeDB `dev`
-#         run: cargo pgrx init "--pg${{ matrix.pg_version }}=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
+      - name: Initialize cargo-pgrx environment for ParadeDB `dev`
+        run: cargo pgrx init "--pg${{ matrix.pg_version }}=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
 
-#       # This is the current version which we want to test upgrading to
-#       - name: Checkout ParadeDB `dev`
-#         run: git checkout ${{ github.head_ref }}
+      # This is the current version which we want to test upgrading to
+      - name: Checkout ParadeDB `dev`
+        run: git checkout ${{ github.head_ref }}
 
-#       - name: Compile & install pg_search `dev`
-#         working-directory: pg_search/
-#         run: cargo pgrx install --features icu --pg-config="/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
+      - name: Compile & install pg_search `dev`
+        working-directory: pg_search/
+        run: cargo pgrx install --features icu --pg-config="/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config"
 
-#       - name: Start Postgres via cargo-pgrx
-#         working-directory: pg_search/
-#         run: |
-#           RUST_BACKTRACE=1 cargo pgrx start pg${{ matrix.pg_version }}
-#           # Necessary for the ephemeral Postgres test to have proper permissions
-#           sudo chown -R $(whoami) /var/run/postgresql/
+      - name: Start Postgres via cargo-pgrx
+        working-directory: pg_search/
+        run: |
+          RUST_BACKTRACE=1 cargo pgrx start pg${{ matrix.pg_version }}
+          # Necessary for the ephemeral Postgres test to have proper permissions
+          sudo chown -R $(whoami) /var/run/postgresql/
 
-#       - name: Alter pg_search extension to the latest version
-#         working-directory: pg_search/
-#         run: |
-#           VERSION=$(grep "^version" ../Cargo.toml | head -1 | awk -F '"' '{print $2}')
-#           psql -h localhost -p 288${{ matrix.pg_version }} postgres -c "ALTER EXTENSION pg_search UPDATE TO '$VERSION';"
+      - name: Alter pg_search extension to the latest version
+        working-directory: pg_search/
+        run: |
+          VERSION=$(grep "^version" ../Cargo.toml | head -1 | awk -F '"' '{print $2}')
+          psql -h localhost -p 288${{ matrix.pg_version }} postgres -c "ALTER EXTENSION pg_search UPDATE TO '$VERSION';"
 
-#       - name: Run pg_search test suite
-#         run: |
-#           export DATABASE_URL=postgresql://localhost:288${{ matrix.pg_version }}/postgres
-#           export PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config
-#           export PARADEDB_TELEMETRY=false
-#           RUST_BACKTRACE=1 cargo test --features pg${{ matrix.pg_version }},icu --no-default-features
+      - name: Run pg_search test suite
+        run: |
+          export DATABASE_URL=postgresql://localhost:288${{ matrix.pg_version }}/postgres
+          export PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config
+          export PARADEDB_TELEMETRY=false
+          RUST_BACKTRACE=1 cargo test --features pg${{ matrix.pg_version }},icu --no-default-features
 
-#       - name: Print the Postgres Logs
-#         if: always()
-#         run: cat ~/.pgrx/${{ matrix.pg_version}}.log
+      - name: Print the Postgres Logs
+        if: always()
+        run: cat ~/.pgrx/${{ matrix.pg_version}}.log

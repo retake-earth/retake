@@ -15,8 +15,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-use crate::index::writer::index::SearchIndexWriter;
-use crate::index::{BlockDirectoryType, WriterResources};
 use crate::postgres::storage::buffer::BufferManager;
 use pgrx::*;
 
@@ -40,20 +38,9 @@ pub extern "C" fn amvacuumcleanup(
         }
     }
 
-    let index_relation = unsafe { PgRelation::from_pg(info.index) };
-
-    // vacuum the index, which is effectively just a forced commit() plus a wait_merging_threads()
-    SearchIndexWriter::open(
-        &index_relation,
-        BlockDirectoryType::Mvcc,
-        WriterResources::Vacuum,
-    )
-    .expect("amvacuumcleanup: should be able to open a SearchIndexWriter")
-    .vacuum()
-    .expect("amvacuumcleanup: SearchIndexWriter.vacuum() should succeed");
-
     // return all recyclable pages to the free space map
     unsafe {
+        let index_relation = PgRelation::from_pg(info.index);
         let index_oid = index_relation.oid();
         let nblocks =
             pg_sys::RelationGetNumberOfBlocksInFork(info.index, pg_sys::ForkNumber::MAIN_FORKNUM);

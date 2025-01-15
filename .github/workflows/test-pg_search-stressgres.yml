@@ -8,6 +8,13 @@ name: Test pg_search Stressgres
 on:
   schedule:
     - cron: "1 0 * * 1,2,3,4,5" # Run once per day on weekdays (days of the week 1-5) at 00:01 UTC
+  push:
+    branches: # Also run on `dev` and `main` to fill the GitHub Actions Rust cache in a way that PRs can see it
+      - dev
+      - main
+    paths:
+      - "**/*.rs"
+      - "**/*.toml"
   workflow_dispatch:
 
 jobs:
