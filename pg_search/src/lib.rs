@@ -27,7 +27,6 @@ mod schema;
 pub mod github;
 pub mod gucs;
 pub mod telemetry;
-pub mod trace;
 
 use self::postgres::customscan;
 use pgrx::*;
@@ -48,8 +47,6 @@ extension_sql!(
     name = "paradedb_grant_all",
     finalize
 );
-
-static mut TRACE_HOOK: trace::TraceHook = trace::TraceHook;
 
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -91,7 +88,6 @@ pub unsafe extern "C" fn _PG_init() {
     // is initialized for all connections.
     #[allow(static_mut_refs)]
     #[allow(deprecated)]
-    pgrx::hooks::register_hook(&mut TRACE_HOOK);
     customscan::register_rel_pathlist(customscan::pdbscan::PdbScan);
 }
 

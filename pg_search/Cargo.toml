@@ -44,8 +44,6 @@ serde_json = { version = "1.0.128", features = ["preserve_order"] }
 tantivy.workspace = true
 tantivy-common.workspace = true
 thiserror = "2.0.2"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 walkdir = "2.5.0"
 ordered-float = "4.2.2"
 uuid = "1.10.0"

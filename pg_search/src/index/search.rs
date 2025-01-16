@@ -27,7 +27,6 @@ use pgrx::PgRelation;
 use std::num::NonZeroUsize;
 use tantivy::Index;
 use tokenizers::{create_normalizer_manager, create_tokenizer_manager};
-use tracing::trace;
 
 pub enum WriterResources {
     CreateIndex,
@@ -106,13 +105,10 @@ pub fn setup_tokenizers(underlying_index: &mut Index, index_relation: &PgRelatio
     let (fields, _) = unsafe { get_fields(index_relation) };
     let tokenizers = fields
         .iter()
-        .filter_map(|(field_name, field_config, _)| {
-            trace!("{} {}", field_name.0, "attempting to create tokenizer");
-            match field_config {
-                SearchFieldConfig::Text { tokenizer, .. }
-                | SearchFieldConfig::Json { tokenizer, .. } => Some(tokenizer),
-                _ => None,
-            }
+        .filter_map(|(_field_name, field_config, _)| match field_config {
+            SearchFieldConfig::Text { tokenizer, .. }
+            | SearchFieldConfig::Json { tokenizer, .. } => Some(tokenizer),
+            _ => None,
         })
         .collect();
 

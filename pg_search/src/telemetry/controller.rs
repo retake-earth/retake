@@ -22,7 +22,6 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-use tracing::debug;
 
 use super::{
     event::TelemetryEvent, DirectoryStore, TelemetryConfigStore, TelemetryStore, TermPoll,
@@ -41,7 +40,7 @@ impl TelemetrySender {
         if self.config_store.telemetry_enabled()? {
             conn.send(uuid, event)
         } else {
-            debug!(
+            pgrx::log!(
                 "paradedb telemetry is disabled, not sending event: {}",
                 event.name()
             );
@@ -50,7 +49,7 @@ impl TelemetrySender {
     }
     pub fn send_deployment(&self) -> Result<()> {
         if self.directory_store.extension_uuid_path()?.exists() {
-            debug!("extension has been deployed before, skipping deployment telemetry");
+            pgrx::log!("extension has been deployed before, skipping deployment telemetry");
             return Ok(());
         }
         let uuid = self.directory_store.extension_uuid()?;

@@ -82,13 +82,13 @@ fn quickstart(mut conn: PgConnection) {
     assert_eq!(rows[1].0, "Sleek running shoes".to_string());
     assert_eq!(rows[2].0, "White jogging shoes".to_string());
     assert_eq!(rows[3].0, "Comfortable slippers".to_string());
-    // TODO: Fix error in CI where "Sturdy hiking boots" is inexplicably swapped with "Winter woolen socks"
-    // assert_eq!(rows[4].0, "Sturdy hiking boots".to_string());
+    // The BM25 score here is a tie, so the order is arbitrary
+    assert!(rows[4].0 == *"Sturdy hiking boots" || rows[4].0 == *"Winter woolen socks");
     assert_eq!(rows[0].3, 5.8135376);
     assert_eq!(rows[1].3, 5.4211845);
     assert_eq!(rows[2].3, 5.4211845);
     assert_eq!(rows[3].3, 2.9362776);
-    // assert_eq!(rows[4].3, 2.9362776);
+    assert_eq!(rows[4].3, 2.9362776);
 
     let rows: Vec<(String, i32, String)> = r#"
     SELECT description, rating, category
