@@ -1,6 +1,8 @@
 use crate::postgres::storage::block::{MergeLockData, MERGE_LOCK};
 use crate::postgres::storage::buffer::{BufferManager, PinnedBuffer};
 use pgrx::pg_sys;
+use rustc_hash::FxHashSet;
+use tantivy::index::SegmentId;
 use tantivy::indexer::{MergeCandidate, MergePolicy};
 use tantivy::SegmentMeta;
 
@@ -22,6 +24,8 @@ pub struct NPlusOneMergePolicy {
     // the minimum number of segments to merge together
     // if we don't have this many, no merge is performed
     pub min_num_segments: usize,
+
+    pub exclude_from_merge: FxHashSet<SegmentId>,
 }
 
 impl MergePolicy for NPlusOneMergePolicy {
@@ -40,7 +44,10 @@ impl MergePolicy for NPlusOneMergePolicy {
         let mut candidate = MergeCandidate(vec![]);
         while segments.len() > n {
             let meta = segments.pop().unwrap();
-            candidate.0.push(meta.id());
+
+            if meta.num_docs() == 0 || !self.exclude_from_merge.contains(&meta.id()) {
+                candidate.0.push(meta.id());
+            }
         }
 
         if candidate.0.len() < 2 {
@@ -71,10 +78,7 @@ impl MergeLock {
 
         let mut bman = BufferManager::new(relation_oid);
 
-        if let Some(mut merge_lock) = bman.get_buffer_for_cleanup_conditional(
-            MERGE_LOCK,
-            pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL),
-        ) {
+        if let Some(mut merge_lock) = bman.get_buffer_conditional(MERGE_LOCK) {
             let mut page = merge_lock.page_mut();
             let metadata = page.contents_mut::<MergeLockData>();
             let last_merge = metadata.last_merge;

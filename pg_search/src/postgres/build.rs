@@ -219,6 +219,7 @@ unsafe fn create_metadata(index_relation: &PgRelation) {
     let mut page = merge_lock.init_page();
     let metadata = page.contents_mut::<MergeLockData>();
     metadata.last_merge = pg_sys::InvalidTransactionId;
+    metadata.last_vacuum = pg_sys::GetCurrentTransactionId();
     metadata.num_segments = 0;
 
     // Init cleanup lock buffer
