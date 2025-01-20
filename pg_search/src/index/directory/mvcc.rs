@@ -278,11 +278,21 @@ impl Directory for MVCCDirectory {
         // try to acquire merge lock and do merge
         if let Some(merge_lock) = unsafe { MergeLock::acquire_for_merge(self.relation_oid) } {
             if matches!(&self.merge_policy, &AllowedMergePolicy::NPlusOne) {
-                let num_segments = merge_lock.num_segments();
+                let num_segments = merge_lock.num_segments;
                 let parallelism = std::thread::available_parallelism()
                     .expect("failed to get available_parallelism")
                     .get();
                 let target_segments = std::cmp::max(parallelism, num_segments as usize);
+
+                // let snapshot = pg_sys::GetActiveSnapshot();
+                // let segment_metas = LinkedItemList::<SegmentMetaEntry>::open(relation_oid, SEGMENT_METAS_START);
+                // let exclude_from_merge = segment_metas
+                //     .iter()
+                //     .filter_map(|entry| {
+                //         if !entry.visible(snapshot) 
+                //     })
+                //     .collect::<FxHashSet<_>>();
+
                 let merge_policy: Box<dyn MergePolicy> = Box::new(NPlusOneMergePolicy {
                     n: target_segments,
                     min_num_segments: MIN_NUM_SEGMENTS,

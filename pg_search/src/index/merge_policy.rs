@@ -55,7 +55,8 @@ impl MergePolicy for NPlusOneMergePolicy {
 /// Only one merge can happen at a time, so we need to lock the merge process
 #[derive(Debug)]
 pub struct MergeLock {
-    num_segments: u32,
+    pub num_segments: u32,
+    pub last_vacuum: pg_sys::TransactionId,
     _buffer: PinnedBuffer,
 }
 
@@ -91,6 +92,7 @@ impl MergeLock {
                 metadata.last_merge = pg_sys::GetCurrentTransactionId();
                 Some(MergeLock {
                     num_segments: metadata.num_segments,
+                    last_vacuum: metadata.last_vacuum,
                     _buffer: merge_lock.unlock(),
                 })
             } else {
@@ -115,12 +117,9 @@ impl MergeLock {
 
         MergeLock {
             num_segments: metadata.num_segments,
+            last_vacuum: metadata.last_vacuum,
             _buffer: merge_lock.unlock(),
         }
-    }
-
-    pub fn num_segments(&self) -> u32 {
-        self.num_segments
     }
 }
 
