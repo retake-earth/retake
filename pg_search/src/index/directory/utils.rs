@@ -327,56 +327,40 @@ pub unsafe fn load_metas(
     let heap_relation = unsafe { pg_sys::RelationIdGetRelation(heap_oid) };
     let mut alive_segments = vec![];
     let mut opstamp = None;
-    let mut blockno = segment_metas.get_start_blockno();
 
-    let bman = segment_metas.bman();
+    for entry in segment_metas.iter() {
+        let visible = match solve_mvcc {
+            MvccSatisfies::Vacuum => {
+                // we should be inside a vacuum, so any segment with an xid that is greater than
+                // or equal to the next xid is not visible to us
+                let before_latest_vacuum = pg_sys::TransactionIdPrecedes(
+                    entry.get_xmin(),
+                    pg_sys::ReadNextFullTransactionId().value as pg_sys::TransactionId,
+                );
 
-    while blockno != pg_sys::InvalidBlockNumber {
-        let buffer = bman.get_buffer(blockno);
-        let page = buffer.page();
-        let max_offset = page.max_offset_number();
-        let mut offsetno = pg_sys::FirstOffsetNumber;
-
-        while offsetno <= max_offset {
-            if let Some((entry, _)) = page.read_item::<SegmentMetaEntry>(offsetno) {
-                let visible = match solve_mvcc {
-                    MvccSatisfies::Vacuum => {
-                        // we should be inside a vacuum, so any segment with an xid that is greater than
-                        // or equal to the next xid is not visible to us
-                        let before_latest_vacuum = pg_sys::TransactionIdPrecedes(
-                            entry.get_xmin(),
-                            pg_sys::ReadNextFullTransactionId().value as pg_sys::TransactionId,
-                        );
-
-                        // the exception being if a segment is a merged segment, in which case it should be considered
-                        // because it's comprised of segments that were visible before the vacuum
-                        (before_latest_vacuum || entry.merge_happened)
-                        // also don't bother considering recyclable segments
-                        && !entry.recyclable(snapshot, heap_relation)
-                    }
-                    MvccSatisfies::Snapshot => entry.visible(snapshot),
-                };
-
-                if visible {
-                    let inner_segment_meta = InnerSegmentMeta {
-                        max_doc: entry.max_doc,
-                        segment_id: entry.segment_id,
-                        deletes: entry.delete.map(|delete_entry| DeleteMeta {
-                            num_deleted_docs: delete_entry.num_deleted_docs,
-                            opstamp: 0, // hardcode zero as the entry's opstamp as it's not used
-                        }),
-                        include_temp_doc_store: Arc::new(AtomicBool::new(false)),
-                    };
-                    alive_segments.push(inner_segment_meta.track(inventory));
-
-                    opstamp = opstamp.max(Some(entry.opstamp()));
-                }
+                // the exception being if a segment is a merged segment, in which case it should be considered
+                // because it's comprised of segments that were visible before the vacuum
+                (before_latest_vacuum || entry.merge_happened)
+                // also don't bother considering recyclable segments
+                && !entry.recyclable(snapshot, heap_relation)
             }
+            MvccSatisfies::Snapshot => entry.visible(snapshot),
+        };
 
-            offsetno += 1;
+        if visible {
+            let inner_segment_meta = InnerSegmentMeta {
+                max_doc: entry.max_doc,
+                segment_id: entry.segment_id,
+                deletes: entry.delete.map(|delete_entry| DeleteMeta {
+                    num_deleted_docs: delete_entry.num_deleted_docs,
+                    opstamp: 0, // hardcode zero as the entry's opstamp as it's not used
+                }),
+                include_temp_doc_store: Arc::new(AtomicBool::new(false)),
+            };
+            alive_segments.push(inner_segment_meta.track(inventory));
+
+            opstamp = opstamp.max(Some(entry.opstamp()));
         }
-
-        blockno = page.next_blockno();
     }
 
     pg_sys::RelationClose(heap_relation);
