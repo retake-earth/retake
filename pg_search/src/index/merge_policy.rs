@@ -105,12 +105,13 @@ impl MergeLock {
     // We ask for an exclusive lock because ambulkdelete must delete all dead ctids
     pub unsafe fn acquire_for_delete(relation_oid: pg_sys::Oid) -> Self {
         let mut bman = BufferManager::new(relation_oid);
-        let merge_lock = bman.get_buffer_for_cleanup(
+        let mut merge_lock = bman.get_buffer_for_cleanup(
             MERGE_LOCK,
             pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL),
         );
-        let page = merge_lock.page();
-        let metadata = page.contents::<MergeLockData>();
+        let mut page = merge_lock.page_mut();
+        let metadata = page.contents_mut::<MergeLockData>();
+        metadata.last_vacuum = pg_sys::ReadNextFullTransactionId().value as pg_sys::TransactionId;
 
         MergeLock {
             num_segments: metadata.num_segments,
