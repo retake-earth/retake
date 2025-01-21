@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 Retake, Inc.
+// Copyright (c) 2023-2025 Retake, Inc.
 //
 // This file is part of ParadeDB - Postgres for Search and Analytics
 //
@@ -81,6 +81,9 @@ pub unsafe extern "C" fn _PG_init() {
 
     postgres::options::init();
     gucs::init();
+
+    #[cfg(not(feature = "pg17"))]
+    postgres::fake_aminsertcleanup::register();
 
     setup_telemetry_background_worker(telemetry::ParadeExtension::PgSearch);
 

@@ -159,7 +159,7 @@ jobs:
           # Necessary for the ephemeral Postgres test to have proper permissions
           sudo chown -R $(whoami) /var/run/postgresql/
 
-      - name: Run integration tests
+      - name: Run pg_search Integration Tests
         if: steps.check_skip.outputs.skip_remaining_steps != 'true'
         working-directory: tests/
         run: |
@@ -168,7 +168,7 @@ jobs:
           export PARADEDB_TELEMETRY=false
           RUST_BACKTRACE=1 cargo test --features icu
 
-      - name: Run pgrx tests
+      - name: Run pg_search Unit Tests
         if: steps.check_skip.outputs.skip_remaining_steps != 'true'
         working-directory: pg_search/
         run: |
@@ -279,7 +279,7 @@ jobs:
           RUST_BACKTRACE=1 cargo pgrx start pg${{ matrix.pg_version }}
           ~/.pgrx/${{ matrix.pg_version }}.*/pgrx-install/bin/createdb -p 288${{ matrix.pg_version }} -h localhost pg_search
 
-      - name: Run pg_search test suite against pgrx-managed Postgres
+      - name: Run pg_search Integration Tests Against pgrx-managed Postgres
         if: steps.check_skip.outputs.skip_remaining_steps != 'true'
         working-directory: tests/
         run: RUST_BACKTRACE=1 DATABASE_URL=postgresql://localhost:288${{ matrix.pg_version }}/pg_search cargo test --no-default-features --features=icu -- --skip replication --skip ephemeral

@@ -92,12 +92,57 @@ jobs:
 
       - name: Run Stressgres Test Suite
         working-directory: stressgres/
-        run: RUST_BACKTRACE=1 cargo run suites/ci.toml "host=localhost port=288${{ matrix.pg_version }} dbname=postgres" 600
+        run: |
+          RUST_BACKTRACE=1 cargo build && timeout 10m \
+          cargo run -- \
+            headless suites/ci.toml "host=localhost port=28817 dbname=postgres" \
+            --log-interval-ms 300 \
+            --log-file stressgres.log \
+            || EXIT_CODE=$?
+
+          if [ "$EXIT_CODE" -eq 124 ]; then
+            echo "Process timed out as expected."
+          fi
+
+      - name: Create Stressgres Graph
+        working-directory: stressgres/
+        run: cargo run -- graph --output stressgres.png stressgres.log
+
+      - name: Upload Stressgres Graph
+        id: artifact-graph
+        uses: actions/upload-artifact@v4
+        with:
+          name: stressgres-graph
+          path: stressgres/stressgres.png
+
+      - name: Upload Stressgres Logs
+        id: artifact-logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: stressgres-logs
+          path: stressgres/stressgres.log
 
       - name: Print Postgres Logs
         run: cat ~/.pgrx/${{ matrix.pg_version }}.log
 
+      - name: Share Stressgres Results to Slack
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            text: "*Stressgres stress test complete!*\n
+            - <${{ steps.artifact-graph.outputs.artifact-url }}|Graph>\n
+            - <${{ steps.artifact-logs.outputs.artifact-url }}|Logs>"
+
       - name: Notify Slack on Failure
         if: failure() && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          curl -X POST -H 'Content-type: application/json' --data '{"text":"Stressgres pg_search Workflow failed in `paradedb/paradedb` -- investigate immediately!"}' ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ARTIFACT_URL="${{ steps.artifact-logs.outputs.artifact-url }}"
+          MESSAGE="Stressgres pg_search Workflow failed in \`paradedb/paradedb\` -- investigate immediately! • GitHub Action Logs: ${GITHUB_RUN_URL} • Stressgres Log: ${ARTIFACT_URL}" echo "Sending failure notification to Slack..."
+          curl -X POST -H 'Content-type: application/json' \
+          --data "{\"text\": \"${MESSAGE}\"}" \
+          ${SLACK_WEBHOOK_URL}

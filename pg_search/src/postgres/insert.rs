@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 Retake, Inc.
+// Copyright (c) 2023-2025 Retake, Inc.
 //
 // This file is part of ParadeDB - Postgres for Search and Analytics
 //
@@ -21,7 +21,7 @@ use crate::postgres::utils::{
     categorize_fields, item_pointer_to_u64, row_to_search_document, CategorizedFieldData,
 };
 use crate::schema::SearchField;
-use pgrx::{pg_guard, pg_sys, PgMemoryContexts, PgRelation, PgTupleDesc};
+use pgrx::{pg_guard, pg_sys, PgRelation, PgTupleDesc};
 use std::ffi::CStr;
 use std::panic::{catch_unwind, resume_unwind};
 
@@ -33,31 +33,6 @@ pub struct InsertState {
     pub writer: Option<SearchIndexWriter>,
     categorized_fields: Vec<(SearchField, CategorizedFieldData)>,
     key_field_name: String,
-    abort_on_drop: bool,
-    #[cfg(not(feature = "pg17"))]
-    committed: bool,
-}
-
-#[cfg(not(feature = "pg17"))]
-impl Drop for InsertState {
-    /// When [`InsertState`] is dropped we'll either commit the underlying tantivy index changes
-    /// or abort.
-    fn drop(&mut self) {
-        unsafe {
-            if pg_sys::IsTransactionState() && !self.abort_on_drop && !self.committed {
-                if let Some(writer) = self.writer.take() {
-                    writer
-                        .commit()
-                        .expect("tantivy index commit should succeed");
-                }
-                self.committed = true;
-            }
-
-            if !pg_sys::IsTransactionState() || self.abort_on_drop {
-                drop(self.writer.take());
-            }
-        }
-    }
 }
 
 impl InsertState {
@@ -73,26 +48,44 @@ impl InsertState {
             writer: Some(writer),
             categorized_fields,
             key_field_name,
-            abort_on_drop: false,
-            #[cfg(not(feature = "pg17"))]
-            committed: false,
         })
     }
 }
 
+#[cfg(not(feature = "pg17"))]
+unsafe fn init_insert_state(
+    index_relation: pg_sys::Relation,
+    index_info: &mut pg_sys::IndexInfo,
+    writer_resources: WriterResources,
+) -> &'static mut InsertState {
+    use crate::postgres::fake_aminsertcleanup::{
+        get_pending_insert_state, reset_pending_insert_state, set_pending_insert_state,
+    };
+
+    if index_info.ii_AmCache.is_null() {
+        let index_relation = PgRelation::from_pg(index_relation);
+        let state = InsertState::new(&index_relation, writer_resources)
+            .expect("should be able to open new SearchIndex for writing");
+
+        set_pending_insert_state(state);
+        index_info.ii_AmCache = &true as *const _ as *mut _; // a pointer to `true` to indicate that we've set up the InsertState
+        pgrx::register_xact_callback(pgrx::PgXactCallbackEvent::Abort, || {
+            reset_pending_insert_state()
+        });
+    }
+
+    get_pending_insert_state().expect("should have a pending insert state")
+}
+
+#[cfg(feature = "pg17")]
 pub unsafe fn init_insert_state(
     index_relation: pg_sys::Relation,
-    index_info: *mut pg_sys::IndexInfo,
+    index_info: &mut pg_sys::IndexInfo,
     writer_resources: WriterResources,
-) -> *mut InsertState {
-    if IsLogicalWorker() {
-        panic!("pg_search logical replication is an enterprise feature");
-    }
-    assert!(!index_info.is_null());
-    let state = (*index_info).ii_AmCache;
-    let index_relation = PgRelation::from_pg(index_relation);
-    if state.is_null() {
+) -> &mut InsertState {
+    if index_info.ii_AmCache.is_null() {
         // we don't have any cached state yet, so create it now
+        let index_relation = PgRelation::from_pg(index_relation);
         let state = InsertState::new(&index_relation, writer_resources)
             .expect("should be able to open new SearchIndex for writing");
 
@@ -103,11 +96,11 @@ pub unsafe fn init_insert_state(
         //
         // SAFETY: `leak_and_drop_on_delete` palloc's memory in CurrentMemoryContext, but in this
         // case we want the thing it allocates to be palloc'd in the `ii_Context`
-        PgMemoryContexts::For((*index_info).ii_Context)
-            .switch_to(|mcxt| (*index_info).ii_AmCache = mcxt.leak_and_drop_on_delete(state).cast())
+        pgrx::PgMemoryContexts::For(index_info.ii_Context)
+            .switch_to(|mcxt| index_info.ii_AmCache = mcxt.leak_and_drop_on_delete(state).cast())
     };
 
-    (*index_info).ii_AmCache.cast()
+    &mut *index_info.ii_AmCache.cast()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -148,8 +141,18 @@ unsafe fn aminsert_internal(
     ctid: pg_sys::ItemPointer,
     index_info: *mut pg_sys::IndexInfo,
 ) -> bool {
+    if IsLogicalWorker() {
+        panic!("pg_search logical replication is an enterprise feature");
+    }
+
     let result = catch_unwind(|| {
-        let state = &mut *init_insert_state(index_relation, index_info, WriterResources::Statement);
+        let state = init_insert_state(
+            index_relation,
+            index_info
+                .as_mut()
+                .expect("index_info argument must not be null"),
+            WriterResources::Statement,
+        );
         let categorized_fields = &state.categorized_fields;
         let key_field_name = &state.key_field_name;
         let writer = state.writer.as_mut().expect("writer should not be null");
@@ -177,23 +180,10 @@ unsafe fn aminsert_internal(
 
     match result {
         Ok(result) => result,
-        Err(e) => {
-            unsafe {
-                // SAFETY:  it's possible the `ii_AmCache` field didn't get initialized, and if
-                // that's the case there's no need (or way!) to indicate we need to do a tantivy abort
-                let state = (*index_info).ii_AmCache.cast::<InsertState>();
-                if !state.is_null() {
-                    (*state).abort_on_drop = true;
-                }
-            }
-
-            // bubble up the panic that we caught during `catch_unwind()`
-            resume_unwind(e)
-        }
+        Err(e) => resume_unwind(e),
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 #[cfg(feature = "pg17")]
 #[pg_guard]
 pub unsafe extern "C" fn aminsertcleanup(
@@ -205,9 +195,13 @@ pub unsafe extern "C" fn aminsertcleanup(
         return;
     }
 
-    if let Some(writer) = (*state).writer.take() {
+    paradedb_aminsertcleanup(state.as_mut().and_then(|state| state.writer.take()));
+}
+
+pub fn paradedb_aminsertcleanup(mut writer: Option<SearchIndexWriter>) {
+    if let Some(writer) = writer.take() {
         writer
             .commit()
-            .expect("must be able to commit inserts in aminsertcleanup");
-    };
+            .expect("must be able to commit inserts in fake_aminsertcleanup");
+    }
 }

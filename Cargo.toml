@@ -3,7 +3,7 @@ resolver = "2"
 members = ["cargo-paradedb", "pg_search", "tests", "tokenizers"]
 
 [workspace.package]
-version = "0.14.0"
+version = "0.14.1"
 edition = "2021"
 license = "AGPL-3.0"
 
@@ -23,9 +23,9 @@ lto = "thin"
 codegen-units = 32
 
 [workspace.dependencies]
-tantivy = { git = "https://github.com/paradedb/tantivy.git", package = "tantivy", branch = "main", features = [
+tantivy = { git = "https://github.com/paradedb/tantivy.git", package = "tantivy", rev = "7f86b472c262d90c506c75aea645050f290fa3e8", features = [
   "quickwit",        # for sstable support
   "stopwords",
   "lz4-compression",
 ], default-features = false }
-tantivy-common = { git = "https://github.com/paradedb/tantivy.git", branch = "main" }
+tantivy-common = { git = "https://github.com/paradedb/tantivy.git", rev = "7f86b472c262d90c506c75aea645050f290fa3e8" }

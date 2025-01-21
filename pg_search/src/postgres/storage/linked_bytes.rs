@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 Retake, Inc.
+// Copyright (c) 2023-2025 Retake, Inc.
 //
 // This file is part of ParadeDB - Postgres for Search and Analytics
 //
@@ -24,6 +24,7 @@ use pgrx::pg_sys::BlockNumber;
 use std::cmp::min;
 use std::io::{Cursor, Read, Write};
 use std::ops::{Deref, Range};
+use std::sync::OnceLock;
 // ---------------------------------------------------------------
 // Linked list implementation over block storage,
 // where each node is a page filled with bm25_max_free_space()
@@ -65,7 +66,7 @@ pub struct LinkedBytesList {
     pub header_blockno: pg_sys::BlockNumber,
     metadata: LinkedListData,
     blocklist_builder: blocklist::builder::BlockList,
-    blocklist_reader: blocklist::reader::BlockList,
+    blocklist_reader: OnceLock<blocklist::reader::BlockList>,
 }
 
 impl Write for LinkedBytesList {
@@ -93,7 +94,11 @@ impl LinkedList for LinkedBytesList {
     }
 
     fn block_for_ord(&self, ord: usize) -> Option<BlockNumber> {
-        self.blocklist_reader.get(ord)
+        self.blocklist_reader
+            .get_or_init(|| {
+                blocklist::reader::BlockList::new(&self.bman, self.metadata.blocklist_start)
+            })
+            .get(ord)
     }
 
     unsafe fn get_linked_list_data(&self) -> LinkedListData {
@@ -152,13 +157,12 @@ impl LinkedBytesList {
             .get_buffer(header_blockno)
             .page_contents::<LinkedListData>();
 
-        let blocklist_reader = blocklist::reader::BlockList::new(&bman, metadata.blocklist_start);
         Self {
             bman,
             header_blockno,
             metadata,
             blocklist_builder: Default::default(),
-            blocklist_reader,
+            blocklist_reader: Default::default(),
         }
     }
 

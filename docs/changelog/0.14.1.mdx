@@ -1,0 +1,17 @@
+---
+title: 0.14.1
+---
+
+## Performance Improvements 🚀
+
+- Performance optimizations to query planning and overall full text search times
+
+## Stability Improvements 💪
+
+- Fixed a bug where `COPY` statements into a table with a BM25 index crashed
+- Fixed a bug where merges would not happen if a single transaction contained multiple `INSERT` statements
+- Fixed a bug where parallel vacuums were not supported over tables with a BM25 index
+
+## Full Changelog
+
+The full changelog is available [here](https://github.com/paradedb/paradedb/releases/tag/v0.14.1).

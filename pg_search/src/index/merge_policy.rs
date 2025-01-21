@@ -71,13 +71,15 @@ impl MergeLock {
             let mut page = merge_lock.page_mut();
             let metadata = page.contents_mut::<MergeLockData>();
             let last_merge = metadata.last_merge;
-
             let snapshot = pg_sys::GetActiveSnapshot();
+            let last_merge_visible = pg_sys::TransactionIdIsCurrentTransactionId(last_merge)
+                || !pg_sys::XidInMVCCSnapshot(last_merge, snapshot);
 
-            if pg_sys::XidInMVCCSnapshot(last_merge, snapshot) {
-                None
-            } else {
+            if last_merge_visible {
+                metadata.last_merge = pg_sys::GetCurrentTransactionId();
                 Some(MergeLock(merge_lock))
+            } else {
+                None
             }
         } else {
             None

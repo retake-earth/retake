@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 Retake, Inc.
+// Copyright (c) 2023-2025 Retake, Inc.
 //
 // This file is part of ParadeDB - Postgres for Search and Analytics
 //
@@ -29,6 +29,8 @@ mod validate;
 
 pub mod customscan;
 pub mod datetime;
+#[cfg(not(feature = "pg17"))]
+pub mod fake_aminsertcleanup;
 pub mod index;
 mod parallel;
 pub mod storage;
