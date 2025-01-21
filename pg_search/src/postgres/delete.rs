@@ -51,7 +51,7 @@ pub extern "C" fn ambulkdelete(
         callback(&mut ctid, callback_state)
     };
 
-    let _merge_lock = unsafe { MergeLock::acquire_for_delete(index_relation.oid()) };
+    let merge_lock = unsafe { MergeLock::acquire_for_delete(index_relation.oid()) };
     let mut writer = SearchIndexWriter::open(
         &index_relation,
         BlockDirectoryType::BulkDelete,
@@ -109,7 +109,7 @@ pub extern "C" fn ambulkdelete(
             // A merge cannot kick off while vacuum is running
             // To prevent this, we keep the merge lock in the IndexBulkDeleteResult state
             // Its Drop impl will be invoked when Postgres cleans up after vacuum
-            // opaque.merge_lock = Some(merge_lock);
+            opaque.merge_lock = Some(merge_lock);
             opaque.into_pg() as *mut pg_sys::IndexBulkDeleteResult
         }
     } else {

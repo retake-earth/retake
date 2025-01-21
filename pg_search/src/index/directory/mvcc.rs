@@ -21,7 +21,7 @@ use crate::index::merge_policy::{
 };
 use crate::index::reader::segment_component::SegmentComponentReader;
 use crate::postgres::storage::block::{
-    FileEntry, MVCCEntry, SegmentFileDetails, SegmentMetaEntry, MERGE_LOCK, SEGMENT_METAS_START,
+    FileEntry, MVCCEntry, SegmentFileDetails, SegmentMetaEntry, DELETE_LOCK, SEGMENT_METAS_START,
 };
 use crate::postgres::storage::LinkedItemList;
 use anyhow::{anyhow, Result};
@@ -284,18 +284,16 @@ impl Directory for MVCCDirectory {
                     .get();
                 let target_segments = std::cmp::max(parallelism, num_segments as usize);
 
-                let snapshot = unsafe { pg_sys::GetActiveSnapshot() };
                 let mut segment_metas = LinkedItemList::<SegmentMetaEntry>::open(
                     self.relation_oid,
                     SEGMENT_METAS_START,
                 );
                 let is_delete_happening = segment_metas
                     .bman_mut()
-                    .get_buffer_for_cleanup_conditional(
-                        MERGE_LOCK,
-                        unsafe { pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL) },
-                    )
-                    .is_some();
+                    .get_buffer_for_cleanup_conditional(DELETE_LOCK, unsafe {
+                        pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL)
+                    })
+                    .is_none();
                 let exclude_from_merge = segment_metas
                     .iter()
                     .filter_map(|entry| unsafe {
@@ -305,13 +303,20 @@ impl Directory for MVCCDirectory {
                         let before_latest_vacuum =
                             pg_sys::TransactionIdPrecedes(entry.get_xmin(), merge_lock.last_vacuum);
 
-                        if !entry.visible(snapshot) || before_latest_vacuum || entry.merge_happened {
-                            return Some(entry.segment_id);
+                        if before_latest_vacuum || entry.merge_happened {
+                            Some(entry.segment_id)
                         } else {
-                            return None;
+                            None
                         }
                     })
                     .collect::<FxHashSet<_>>();
+
+                pgrx::log!(
+                    "merge on insert {:?} last vacuum {:?} is happening {}",
+                    unsafe { pg_sys::GetCurrentTransactionId() },
+                    merge_lock.last_vacuum,
+                    is_delete_happening
+                );
 
                 let merge_policy: Box<dyn MergePolicy> = Box::new(NPlusOneMergePolicy {
                     n: target_segments,

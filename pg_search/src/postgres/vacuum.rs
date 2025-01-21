@@ -33,14 +33,19 @@ pub extern "C" fn amvacuumcleanup(
     unsafe {
         let index_relation = PgRelation::from_pg(info.index);
         let index_oid = index_relation.oid();
+
+        pg_sys::LockRelationForExtension(info.index, pg_sys::ExclusiveLock as i32);
         let nblocks =
             pg_sys::RelationGetNumberOfBlocksInFork(info.index, pg_sys::ForkNumber::MAIN_FORKNUM);
+        pg_sys::UnlockRelationForExtension(info.index, pg_sys::ExclusiveLock as i32);
+
         let mut bman = BufferManager::new(index_oid);
         let heap_oid = pg_sys::IndexGetRelation(index_oid, false);
         let heap_relation = pg_sys::RelationIdGetRelation(heap_oid);
 
         for blockno in VACUUM_START..nblocks {
-            check_for_interrupts!();
+            pg_sys::vacuum_delay_point();
+
             let buffer = bman.get_buffer(blockno);
             let page = buffer.page();
 

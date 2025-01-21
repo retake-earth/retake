@@ -20,8 +20,8 @@ use crate::index::reader::index::SearchIndexReader;
 use crate::index::writer::index::SearchIndexWriter;
 use crate::index::BlockDirectoryType;
 use crate::postgres::storage::block::{
-    MergeLockData, SegmentMetaEntry, CLEANUP_LOCK, MERGE_LOCK, SCHEMA_START, SEGMENT_METAS_START,
-    SETTINGS_START,
+    MergeLockData, SegmentMetaEntry, CLEANUP_LOCK, DELETE_LOCK, MERGE_LOCK, SCHEMA_START,
+    SEGMENT_METAS_START, SETTINGS_START,
 };
 use crate::postgres::storage::buffer::BufferManager;
 use crate::postgres::storage::{LinkedBytesList, LinkedItemList};
@@ -226,6 +226,10 @@ unsafe fn create_metadata(index_relation: &PgRelation) {
     let mut cleanup_lock = bman.new_buffer();
     assert_eq!(cleanup_lock.number(), CLEANUP_LOCK);
     cleanup_lock.init_page();
+
+    let mut delete_lock = bman.new_buffer();
+    assert_eq!(delete_lock.number(), DELETE_LOCK);
+    delete_lock.init_page();
 
     // initialize all the other required buffers
     let schema = LinkedBytesList::create(relation_oid);

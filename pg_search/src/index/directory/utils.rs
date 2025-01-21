@@ -1,7 +1,7 @@
 use crate::index::mvcc::MvccSatisfies;
 use crate::postgres::storage::block::{
     DeleteEntry, FileEntry, LinkedList, MVCCEntry, PgItem, SegmentFileDetails, SegmentMetaEntry,
-    MERGE_LOCK, SCHEMA_START, SEGMENT_METAS_START, SETTINGS_START,
+    DELETE_LOCK, SCHEMA_START, SEGMENT_METAS_START, SETTINGS_START,
 };
 use crate::postgres::storage::{LinkedBytesList, LinkedItemList};
 use anyhow::Result;
@@ -310,10 +310,10 @@ pub unsafe fn save_new_metas(
     let is_delete_happening = linked_list
         .bman_mut()
         .get_buffer_for_cleanup_conditional(
-            MERGE_LOCK,
+            DELETE_LOCK,
             pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL),
         )
-        .is_some();
+        .is_none();
     if merge_happened && !is_delete_happening {
         linked_list.garbage_collect(pg_sys::GetAccessStrategy(
             pg_sys::BufferAccessStrategyType::BAS_VACUUM,

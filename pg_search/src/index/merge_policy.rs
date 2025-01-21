@@ -1,4 +1,4 @@
-use crate::postgres::storage::block::{MergeLockData, MERGE_LOCK};
+use crate::postgres::storage::block::{MergeLockData, DELETE_LOCK, MERGE_LOCK};
 use crate::postgres::storage::buffer::{BufferManager, PinnedBuffer};
 use pgrx::pg_sys;
 use rustc_hash::FxHashSet;
@@ -111,18 +111,28 @@ impl MergeLock {
     // We ask for an exclusive lock because ambulkdelete must delete all dead ctids
     pub unsafe fn acquire_for_delete(relation_oid: pg_sys::Oid) -> Self {
         let mut bman = BufferManager::new(relation_oid);
-        let mut merge_lock = bman.get_buffer_for_cleanup(
-            MERGE_LOCK,
+
+        let (num_segments, last_vacuum) = {
+            let mut merge_lock = bman.get_buffer_for_cleanup(
+                MERGE_LOCK,
+                pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL),
+            );
+            let mut page = merge_lock.page_mut();
+            let metadata = page.contents_mut::<MergeLockData>();
+            metadata.last_vacuum =
+                pg_sys::ReadNextFullTransactionId().value as pg_sys::TransactionId;
+            (metadata.num_segments, metadata.last_vacuum)
+        };
+
+        let delete_lock = bman.get_buffer_for_cleanup(
+            DELETE_LOCK,
             pg_sys::GetAccessStrategy(pg_sys::BufferAccessStrategyType::BAS_NORMAL),
         );
-        let mut page = merge_lock.page_mut();
-        let metadata = page.contents_mut::<MergeLockData>();
-        metadata.last_vacuum = pg_sys::ReadNextFullTransactionId().value as pg_sys::TransactionId;
 
         MergeLock {
-            num_segments: metadata.num_segments,
-            last_vacuum: metadata.last_vacuum,
-            _buffer: merge_lock.unlock(),
+            num_segments,
+            last_vacuum,
+            _buffer: delete_lock.unlock(),
         }
     }
 }
