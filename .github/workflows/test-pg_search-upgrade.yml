@@ -140,6 +140,7 @@ jobs:
           VERSION=$(grep "^version" ../Cargo.toml | head -1 | awk -F '"' '{print $2}')
           psql -h localhost -p 288${{ matrix.pg_version }} postgres -c "ALTER EXTENSION pg_search UPDATE TO '$VERSION';"
 
+      # We only run the integration tests since pgrx won't run the #[pg_test] unit tests in an existing database
       - name: Run pg_search Integration Tests
         working-directory: tests/
         run: |
@@ -147,13 +148,6 @@ jobs:
           export PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg_version }}/bin/pg_config
           export PARADEDB_TELEMETRY=false
           RUST_BACKTRACE=1 cargo test --features icu
-
-      - name: Run pg_search Unit Tests
-        working-directory: pg_search/
-        run: |
-          export DATABASE_URL=postgresql://localhost:288${{ matrix.pg_version }}/postgres
-          export PARADEDB_TELEMETRY=false
-          RUST_BACKTRACE=1 cargo test --features pg${{ matrix.pg_version }} --no-default-features
 
       - name: Print the Postgres Logs
         if: always()

@@ -29,7 +29,7 @@ pub struct VisibilityChecker {
 impl Drop for VisibilityChecker {
     fn drop(&mut self) {
         unsafe {
-            if !pg_sys::IsTransactionState() {
+            if !crate::postgres::utils::IsTransactionState() {
                 // we are not in a transaction, so we can't do things like release buffers and close relations
                 return;
             }

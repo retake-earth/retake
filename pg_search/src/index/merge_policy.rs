@@ -61,7 +61,7 @@ impl MergeLock {
     // Merges should only happen if there is no other merge in progress
     // AND the effects of the previous merge are visible
     pub unsafe fn acquire_for_merge(relation_oid: pg_sys::Oid) -> Option<Self> {
-        if !pg_sys::IsTransactionState() {
+        if !crate::postgres::utils::IsTransactionState() {
             return None;
         }
 
@@ -104,7 +104,7 @@ impl MergeLock {
 impl Drop for MergeLock {
     fn drop(&mut self) {
         unsafe {
-            if pg_sys::IsTransactionState() {
+            if crate::postgres::utils::IsTransactionState() {
                 let mut page = self.0.page_mut();
                 let metadata = page.contents_mut::<MergeLockData>();
                 metadata.last_merge = pg_sys::GetCurrentTransactionId();

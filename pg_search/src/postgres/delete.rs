@@ -63,7 +63,7 @@ pub extern "C" fn ambulkdelete(
     let mut did_delete = false;
 
     for segment_reader in reader.searcher().segment_readers() {
-        let ctid_ff = FFType::new(segment_reader.fast_fields(), "ctid");
+        let ctid_ff = FFType::new_ctid(segment_reader.fast_fields());
 
         for doc_id in 0..segment_reader.max_doc() {
             check_for_interrupts!();

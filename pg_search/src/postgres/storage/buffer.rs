@@ -11,7 +11,7 @@ impl Drop for Buffer {
     fn drop(&mut self) {
         unsafe {
             if self.pg_buffer != pg_sys::InvalidBuffer as pg_sys::Buffer
-                && pg_sys::IsTransactionState()
+                && crate::postgres::utils::IsTransactionState()
             {
                 pg_sys::UnlockReleaseBuffer(self.pg_buffer);
             }
@@ -66,7 +66,7 @@ pub struct BufferMut {
 impl Drop for BufferMut {
     fn drop(&mut self) {
         unsafe {
-            if pg_sys::IsTransactionState() && self.dirty {
+            if crate::postgres::utils::IsTransactionState() && self.dirty {
                 pg_sys::MarkBufferDirty(self.inner.pg_buffer);
             }
         }
@@ -122,7 +122,7 @@ pub struct PinnedBuffer {
 impl Drop for PinnedBuffer {
     fn drop(&mut self) {
         unsafe {
-            if pg_sys::IsTransactionState() {
+            if crate::postgres::utils::IsTransactionState() {
                 pg_sys::ReleaseBuffer(self.pg_buffer);
             }
         }

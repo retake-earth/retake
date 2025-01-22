@@ -55,7 +55,7 @@ impl Default for NormalScanExecState {
 impl Drop for NormalScanExecState {
     fn drop(&mut self) {
         unsafe {
-            if pg_sys::IsTransactionState()
+            if crate::postgres::utils::IsTransactionState()
                 && self.vmbuff != pg_sys::InvalidBuffer as pg_sys::Buffer
             {
                 pg_sys::ReleaseBuffer(self.vmbuff);

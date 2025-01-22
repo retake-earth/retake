@@ -150,7 +150,7 @@ impl Iterator for SearchResults {
             SearchResults::SingleSegment(searcher, segment_ord, fftype, iter) => {
                 let (score, doc_address) = iter.next()?;
                 let ctid_ff = fftype.get_or_insert_with(|| {
-                    FFType::new(searcher.segment_reader(*segment_ord).fast_fields(), "ctid")
+                    FFType::new_ctid(searcher.segment_reader(*segment_ord).fast_fields())
                 });
                 let scored = SearchIndexScore {
                     ctid: ctid_ff
@@ -165,11 +165,10 @@ impl Iterator for SearchResults {
                 match last.next() {
                     Some((score, doc_address)) => {
                         let ctid_ff = fftype.get_or_insert_with(|| {
-                            FFType::new(
+                            FFType::new_ctid(
                                 searcher
                                     .segment_reader(doc_address.segment_ord)
                                     .fast_fields(),
-                                "ctid",
                             )
                         });
                         let scored = SearchIndexScore {
@@ -192,11 +191,10 @@ impl Iterator for SearchResults {
         };
 
         let ctid_ff = ff_lookup.entry(doc_address.segment_ord).or_insert_with(|| {
-            FFType::new(
+            FFType::new_ctid(
                 searcher
                     .segment_reader(doc_address.segment_ord)
                     .fast_fields(),
-                "ctid",
             )
         });
         let scored = SearchIndexScore {

@@ -110,6 +110,12 @@ pub enum FFType {
 }
 
 impl FFType {
+    /// Construct the proper [`FFType`] for the internal `ctid` field, which
+    /// should be a known field name in the Tantivy index
+    pub fn new_ctid(ffr: &FastFieldReaders) -> Self {
+        Self::U64(ffr.u64("ctid").expect("ctid should be a u64 fast field"))
+    }
+
     /// Construct the proper [`FFType`] for the specified `field_name`, which
     /// should be a known field name in the Tantivy index
     #[track_caller]

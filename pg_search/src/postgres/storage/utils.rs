@@ -180,7 +180,7 @@ impl BM25BufferCache {
 impl Drop for BM25BufferCache {
     fn drop(&mut self) {
         unsafe {
-            if pg_sys::IsTransactionState() {
+            if crate::postgres::utils::IsTransactionState() {
                 pg_sys::RelationClose(self.indexrel.as_ptr());
                 pg_sys::RelationClose(self.heaprel.as_ptr());
             }

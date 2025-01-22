@@ -24,6 +24,12 @@ use pgrx::itemptr::{item_pointer_get_both, item_pointer_set_all};
 use pgrx::*;
 use std::str::FromStr;
 
+extern "C" {
+    // SAFETY: `IsTransactionState()` doesn't raise an ERROR.  As such, we can avoid the pgrx
+    // sigsetjmp overhead by linking to the function directly.
+    pub fn IsTransactionState() -> bool;
+}
+
 /// Finds and returns the `USING bm25` index on the specified relation with the
 /// highest OID, or [`None`] if there aren't any.
 pub fn locate_bm25_index(heaprelid: pg_sys::Oid) -> Option<PgRelation> {

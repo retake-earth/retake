@@ -392,7 +392,7 @@ mod term_ord_collector {
                 segment_ord: segment_local_id,
                 results: Default::default(),
                 ff: ff.str(&self.field)?.expect("ff should be a str field"),
-                ctid_ff: FFType::new(ff, "ctid"),
+                ctid_ff: FFType::new_ctid(ff),
             })
         }
 
