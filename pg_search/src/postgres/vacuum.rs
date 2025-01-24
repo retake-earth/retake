@@ -39,7 +39,9 @@ pub extern "C" fn amvacuumcleanup(
         let heap_relation = pg_sys::RelationIdGetRelation(heap_oid);
 
         for blockno in 0..nblocks {
-            check_for_interrupts!();
+            if blockno % 100 == 0 {
+                pg_sys::vacuum_delay_point();
+            }
             let buffer = bman.get_buffer(blockno);
             let page = buffer.page();
 

@@ -27,24 +27,24 @@ use crate::index::{BlockDirectoryType, WriterResources};
 use crate::postgres::storage::buffer::BufferManager;
 
 #[pg_guard]
-pub extern "C" fn ambulkdelete(
+pub unsafe extern "C" fn ambulkdelete(
     info: *mut pg_sys::IndexVacuumInfo,
     stats: *mut pg_sys::IndexBulkDeleteResult,
     callback: pg_sys::IndexBulkDeleteCallback,
     callback_state: *mut ::std::os::raw::c_void,
 ) -> *mut pg_sys::IndexBulkDeleteResult {
-    let info = unsafe { PgBox::from_pg(info) };
-    let mut stats = unsafe { PgBox::from_pg(stats) };
-    let index_relation = unsafe { PgRelation::from_pg(info.index) };
+    let info = PgBox::from_pg(info);
+    let mut stats = PgBox::from_pg(stats);
+    let index_relation = PgRelation::from_pg(info.index);
     let callback =
         callback.expect("the ambulkdelete() callback should be a valid function pointer");
-    let callback = move |ctid_val: u64| unsafe {
+    let callback = move |ctid_val: u64| {
         let mut ctid = ItemPointerData::default();
         crate::postgres::utils::u64_to_item_pointer(ctid_val, &mut ctid);
         callback(&mut ctid, callback_state)
     };
 
-    let merge_lock = unsafe { MergeLock::acquire_for_delete(index_relation.oid()) };
+    let merge_lock = MergeLock::acquire_for_delete(index_relation.oid());
     let mut writer = SearchIndexWriter::open(
         &index_relation,
         BlockDirectoryType::BulkDelete,
@@ -61,7 +61,24 @@ pub extern "C" fn ambulkdelete(
         let ctid_ff = FFType::new_ctid(segment_reader.fast_fields());
 
         for doc_id in 0..segment_reader.max_doc() {
-            check_for_interrupts!();
+            if doc_id % 100 == 0 {
+                // NB:  when `IsInParallelMode()` is true, it seems there's always a pending interrupt
+                // so we just don't bother checking for pending interrupts in that situation.  This
+                // is in the case of a parallel vacuum
+                if pg_sys::InterruptPending != 0 && !pg_sys::IsInParallelMode() {
+                    drop(merge_lock);
+
+                    // we think there's a pending interrupt, so this should raise a cancel query ERROR
+                    pg_sys::vacuum_delay_point();
+
+                    // if we got here then, ultimately, CHECK_FOR_INTERRUPTS() (which is called via
+                    // vacuum_delay_point()) didn't actually interrupt us, and we're just DOA now
+                    // because we've already dropped our merge_lock
+                    unreachable!("ambulkdelete: detected interrupt but wasn't cancelled");
+                }
+                pg_sys::vacuum_delay_point();
+            }
+
             let ctid = ctid_ff.as_u64(doc_id).expect("ctid should be present");
             if callback(ctid) {
                 did_delete = true;
@@ -71,7 +88,8 @@ pub extern "C" fn ambulkdelete(
             }
         }
     }
-    // Don't merge here, amvacuumcleanup will merge
+
+    // this won't merge as the `WriterResources::Vacuum` uses `AllowedMergePolicy::None`
     writer
         .commit()
         .expect("ambulkdelete: commit should succeed");
